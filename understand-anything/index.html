@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Understand-Anything - Interactive Knowledge Graph Demo</title>
+  
+  <!-- TailwindCSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- React Flow -->
+  <script src="https://unpkg.com/@xyflow/react@12/dist/umd/index.umd.js"></script>
+  
+  <!-- D3 for force simulation -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  
+  <!-- Fuse.js -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+  
+  <style>
+    :root {
+      --color-layer-api: #8b5cf6;
+      --color-layer-service: #3b82f6;
+      --color-layer-data: #10b981;
+      --color-layer-ui: #f59e0b;
+      --color-layer-utility: #6b7280;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+    }
+    
+    .dark body {
+      background: #0f172a;
+    }
+    
+    /* React Flow overrides */
+    .react-flow__node {
+      border-radius: 12px;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+    
+    .react-flow__node:hover {
+      transform: scale(1.02);
+      z-index: 10;
+    }
+    
+    .react-flow__controls {
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    }
+    
+    .react-flow__minimap {
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    
+    /* Animation */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .animate-pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    /* Graph node styles */
+    .graph-node {
+      background: white;
+      border: 2px solid transparent;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      transition: all 0.2s ease;
+    }
+    
+    .graph-node:hover {
+      border-color: #6366f1;
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    }
+    
+    .graph-node.selected {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    
+    .layer-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: white;
+    }
+    
+    /* Search highlight */
+    .search-highlight {
+      background-color: #fef08a;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+    
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.5s infinite;
+      border-radius: 4px;
+    }
+    
+    @keyframes skeleton-loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    /* Tour overlay */
+    .tour-content {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 51;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+    }
+    
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      z-index: 100;
+      padding: 8px 12px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      font-size: 12px;
+      max-width: 300px;
+      pointer-events: none;
+    }
+    
+    /* Panel */
+    .panel {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
+    const { 
+      ReactFlow, 
+      Background, 
+      Controls, 
+      MiniMap, 
+      Panel,
+      Handle,
+      Position,
+      useNodesState,
+      useEdgesState,
+      Node,
+      Edge
+    } = ReactFlow;
+
+    // ==================== DATA ====================
+    const DEMO_NODES = [
+      // API Layer
+      { id: 'api-1', type: 'file', name: 'api/routes.ts', layer: 'api', description: 'Main API router configuration', tags: ['api', 'routes'] },
+      { id: 'api-2', type: 'function', name: 'handleAuth', layer: 'api', description: 'Authentication request handler', tags: ['auth', 'handler'] },
+      { id: 'api-3', type: 'function', name: 'handleUsers', layer: 'api', description: 'User CRUD operations', tags: ['users', 'api'] },
+      
+      // Service Layer
+      { id: 'svc-1', type: 'class', name: 'UserService', layer: 'service', description: 'User business logic', tags: ['service', 'users'] },
+      { id: 'svc-2', type: 'function', name: 'createUser', layer: 'service', description: 'Create new user', tags: ['create', 'user'] },
+      { id: 'svc-3', type: 'function', name: 'updateUser', layer: 'service', description: 'Update user data', tags: ['update', 'user'] },
+      { id: 'svc-4', type: 'function', name: 'sendEmail', layer: 'service', description: 'Send email notification', tags: ['email', 'notification'] },
+      
+      // Data Layer
+      { id: 'data-1', type: 'class', name: 'UserRepository', layer: 'data', description: 'User data access layer', tags: ['repository', 'db'] },
+      { id: 'data-2', type: 'function', name: 'findById', layer: 'data', description: 'Find user by ID', tags: ['query', 'db'] },
+      { id: 'data-3', type: 'function', name: 'saveUser', layer: 'data', description: 'Save user to database', tags: ['insert', 'db'] },
+      { id: 'data-4', type: 'file', name: 'models/user.ts', layer: 'data', description: 'User data model', tags: ['model', 'schema'] },
+      
+      // UI Layer
+      { id: 'ui-1', type: 'file', name: 'pages/users.tsx', layer: 'ui', description: 'Users page component', tags: ['page', 'react'] },
+      { id: 'ui-2', type: 'function', name: 'UserList', layer: 'ui', description: 'User list component', tags: ['component'] },
+      { id: 'ui-3', type: 'function', name: 'UserForm', layer: 'ui', description: 'User form component', tags: ['form', 'component'] },
+      { id: 'ui-4', type: 'function', name: 'UserCard', layer: 'ui', description: 'User card display', tags: ['display'] },
+      
+      // Utility Layer
+      { id: 'util-1', type: 'function', name: 'validateEmail', layer: 'utility', description: 'Email validation utility', tags: ['validation', 'email'] },
+      { id: 'util-2', type: 'function', name: 'hashPassword', layer: 'utility', description: 'Password hashing', tags: ['security', 'crypto'] },
+      { id: 'util-3', type: 'function', name: 'formatDate', layer: 'utility', description: 'Date formatting', tags: ['format'] },
+    ];
+
+    const DEMO_EDGES = [
+      // API -> Service
+      { source: 'api-2', target: 'svc-1', type: 'calls', label: 'calls' },
+      { source: 'api-3', target: 'svc-1', type: 'calls', label: 'calls' },
+      
+      // Service -> Service
+      { source: 'svc-2', target: 'svc-4', type: 'calls', label: 'sends email' },
+      { source: 'svc-2', target: 'util-2', type: 'calls', label: 'hashes' },
+      
+      // Service -> Data
+      { source: 'svc-1', target: 'data-1', type: 'uses', label: 'uses' },
+      { source: 'svc-2', target: 'data-3', type: 'calls', label: 'saves' },
+      { source: 'svc-3', target: 'data-3', type: 'calls', label: 'updates' },
+      
+      // Data -> Data
+      { source: 'data-1', target: 'data-4', type: 'imports', label: 'uses model' },
+      { source: 'data-2', target: 'data-4', type: 'imports', label: 'type' },
+      
+      // UI -> Service
+      { source: 'ui-1', target: 'svc-1', type: 'uses', label: 'displays' },
+      { source: 'ui-2', target: 'svc-1', type: 'calls', label: 'fetches' },
+      { source: 'ui-3', target: 'svc-2', type: 'calls', label: 'creates' },
+      { source: 'ui-3', target: 'util-1', type: 'calls', label: 'validates' },
+      
+      // UI -> UI
+      { source: 'ui-1', target: 'ui-2', type: 'contains', label: 'contains' },
+      { source: 'ui-1', target: 'ui-3', type: 'contains', label: 'contains' },
+      { source: 'ui-2', target: 'ui-4', type: 'contains', label: 'renders' },
+    ];
+
+    const LAYER_COLORS = {
+      api: '#8b5cf6',
+      service: '#3b82f6',
+      data: '#10b981',
+      ui: '#f59e0b',
+      utility: '#6b7280'
+    };
+
+    const NODE_TYPE_ICONS = {
+      file: '📄',
+      function: '⚡',
+      class: '🏗️',
+      method: '🔧',
+      interface: '📋'
+    };
+
+    // ==================== COMPONENTS ====================
+
+    // Graph Node Component
+    const GraphNode = ({ data, selected }) => {
+      const [isHovered, setIsHovered] = useState(false);
+      
+      return (
+        <div 
+          className={`graph-node p-4 min-w-[180px] max-w-[250px] rounded-xl ${selected ? 'selected' : ''}`}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white" />
+          
+          <div className="flex items-center gap-2 mb-2">
+            <div className="text-xl">{NODE_TYPE_ICONS[data.type] || '📦'}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm text-gray-900 truncate">
+                {data.name}
+              </div>
+              <div className="text-xs text-gray-500 capitalize flex items-center gap-1">
+                {data.type}
+                <span 
+                  className="layer-badge"
+                  style={{ backgroundColor: LAYER_COLORS[data.layer] }}
+                >
+                  {data.layer}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {data.description && (
+            <p className="text-xs text-gray-600 line-clamp-2">
+              {data.description}
+            </p>
+          )}
+          
+          {data.tags && data.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {data.tags.slice(0, 3).map((tag, i) => (
+                <span key={i} className="px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+          
+          {selected && (
+            <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          )}
+          
+          <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white" />
+        </div>
+      );
+    };
+
+    // Search Panel Component
+    const SearchPanel = ({ nodes, onSelectNode }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const [query, setQuery] = useState('');
+      const [results, setResults] = useState([]);
+      const [selectedIndex, setSelectedIndex] = useState(0);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        if (isOpen && inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, [isOpen]);
+
+      useEffect(() => {
+        if (query.trim()) {
+          const fuse = new Fuse(nodes, {
+            keys: ['name', 'description', 'tags', 'layer'],
+            threshold: 0.4
+          });
+          const searchResults = fuse.search(query, { limit: 10 });
+          setResults(searchResults);
+          setSelectedIndex(0);
+        } else {
+          setResults([]);
+        }
+      }, [query, nodes]);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter' && results.length > 0) {
+          e.preventDefault();
+          onSelectNode(results[selectedIndex].item.id);
+          setIsOpen(false);
+          setQuery('');
+        } else if (e.key === 'Escape') {
+          setIsOpen(false);
+          setQuery('');
+        }
+      };
+
+      return (
+        <div className="relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200 shadow-sm hover:border-gray-300 transition-colors"
+          >
+            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span className="text-sm text-gray-500">Search nodes...</span>
+            <kbd className="px-2 py-0.5 text-xs text-gray-400 bg-gray-100 rounded">⌘K</kbd>
+          </button>
+
+          {isOpen && (
+            <div className="absolute top-full left-0 mt-2 w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 animate-fade-in">
+              <div className="p-3 border-b border-gray-100">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Search by name, description, or tag..."
+                  className="w-full px-3 py-2 text-sm bg-gray-50 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              
+              <div className="max-h-80 overflow-y-auto">
+                {results.length > 0 ? (
+                  results.map((result, index) => (
+                    <button
+                      key={result.item.id}
+                      onClick={() => {
+                        onSelectNode(result.item.id);
+                        setIsOpen(false);
+                        setQuery('');
+                      }}
+                      className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${index === selectedIndex ? 'bg-indigo-50' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="px-2 py-0.5 text-xs rounded text-white"
+                            style={{ backgroundColor: LAYER_COLORS[result.item.layer] }}
+                          >
+                            {result.item.layer}
+                          </span>
+                          <span className="font-medium text-sm text-gray-900">
+                            {result.item.name}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400 capitalize">
+                          {result.item.type}
+                        </span>
+                      </div>
+                      {result.item.description && (
+                        <p className="mt-1 text-xs text-gray-500 truncate">
+                          {result.item.description}
+                        </p>
+                      )}
+                    </button>
+                  ))
+                ) : query.trim() ? (
+                  <div className="px-4 py-8 text-center text-gray-500">
+                    <p className="text-sm">No results found for "{query}"</p>
+                  </div>
+                ) : (
+                  <div className="px-4 py-8 text-center text-gray-500">
+                    <p className="text-sm">Start typing to search...</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+                <span>↑↓ navigate</span>
+                <span>↵ select</span>
+                <span>esc close</span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // Layer Filter Component
+    const LayerFilter = ({ nodes, activeLayer, onLayerChange }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      
+      const layerCounts = useMemo(() => {
+        const counts = { all: nodes.length };
+        nodes.forEach(node => {
+          counts[node.layer] = (counts[node.layer] || 0) + 1;
+        });
+        return counts;
+      }, [nodes]);
+
+      const layers = ['all', 'api', 'service', 'data', 'ui', 'utility'];
+
+      return (
+        <div className="relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200 shadow-sm hover:border-gray-300 transition-colors"
+          >
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: LAYER_COLORS[activeLayer] || '#6366f1' }}
+            />
+            <span className="text-sm font-medium text-gray-700 capitalize">
+              {activeLayer === 'all' ? 'All Layers' : activeLayer}
+            </span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {isOpen && (
+            <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl border border-gray-200 shadow-xl z-50 animate-fade-in">
+              <div className="p-2">
+                {layers.map(layer => (
+                  <button
+                    key={layer}
+                    onClick={() => {
+                      onLayerChange(layer);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors ${activeLayer === layer ? 'bg-indigo-50' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: LAYER_COLORS[layer] || '#6366f1' }}
+                      />
+                      <span className={`text-sm font-medium ${activeLayer === layer ? 'text-indigo-600' : 'text-gray-700'}`}>
+                        {layer === 'all' ? 'All Layers' : layer.charAt(0).toUpperCase() + layer.slice(1)}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                      {layerCounts[layer] || 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // Node Detail Panel Component
+    const NodeDetailPanel = ({ node, onClose, onRelatedClick }) => {
+      if (!node) return null;
+
+      const relatedEdges = DEMO_EDGES.filter(e => e.source === node.id || e.target === node.id);
+      const relatedNodes = relatedEdges
+        .map(e => {
+          const relatedId = e.source === node.id ? e.target : e.source;
+          return DEMO_NODES.find(n => n.id === relatedId);
+        })
+        .filter(Boolean);
+
+      return (
+        <div className="absolute top-20 right-4 w-96 max-h-[calc(100vh-8rem)] bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden animate-fade-in z-40">
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">{NODE_TYPE_ICONS[node.type] || '📦'}</div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">{node.name}</h3>
+                  <p className="text-sm text-gray-500 capitalize">{node.type}</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 overflow-y-auto max-h-[calc(100vh-16rem)]">
+            <div className="mb-4">
+              <span 
+                className="layer-badge"
+                style={{ backgroundColor: LAYER_COLORS[node.layer] }}
+              >
+                {node.layer.toUpperCase()} LAYER
+              </span>
+            </div>
+
+            {node.description && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Description</h4>
+                <p className="text-sm text-gray-700">{node.description}</p>
+              </div>
+            )}
+
+            {node.tags && node.tags.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Tags</h4>
+                <div className="flex flex-wrap gap-1">
+                  {node.tags.map((tag, i) => (
+                    <span key={i} className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {relatedNodes.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                  Related ({relatedNodes.length})
+                </h4>
+                <div className="space-y-2">
+                  {relatedNodes.slice(0, 5).map((relNode, i) => {
+                    const edge = relatedEdges.find(e => 
+                      (e.source === node.id && e.target === relNode.id) ||
+                      (e.target === node.id && e.source === relNode.id)
+                    );
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => onRelatedClick(relNode.id)}
+                        className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 text-left transition-colors"
+                      >
+                        <span className="px-1.5 py-0.5 text-xs bg-gray-100 rounded text-gray-600">
+                          {edge?.label || 'related'}
+                        </span>
+                        <span className="text-sm text-gray-700 truncate">{relNode.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-gray-100 flex gap-2">
+            <button className="flex-1 px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+              View Code
+            </button>
+            <button className="flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+              Copy Link
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // Stats Bar Component
+    const StatsBar = ({ nodes, edges, activeLayer }) => {
+      return (
+        <div className="absolute top-0 left-0 right-0 bg-white border-b border-gray-200 px-4 py-3 z-30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <svg className="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <span className="font-semibold text-gray-900">Understand-Anything</span>
+              </div>
+              {activeLayer !== 'all' && (
+                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-xs font-medium rounded">
+                  Filtering: {activeLayer}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                </svg>
+                <span className="text-sm text-gray-600">
+                  <span className="font-medium text-gray-900">{nodes.length}</span> nodes
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" />
+                </svg>
+                <span className="text-sm text-gray-600">
+                  <span className="font-medium text-gray-900">{edges.length}</span> edges
+                </span>
+              </div>
+              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded">
+                TypeScript
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // Legend Component
+    const Legend = ({ nodes }) => {
+      const layerCounts = useMemo(() => {
+        const counts = {};
+        nodes.forEach(n => {
+          counts[n.layer] = (counts[n.layer] || 0) + 1;
+        });
+        return counts;
+      }, [nodes]);
+
+      return (
+        <div className="absolute bottom-4 right-4 p-4 bg-white rounded-xl border border-gray-200 shadow-lg">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase mb-3">Layers</h4>
+          <div className="space-y-2">
+            {Object.entries(LAYER_COLORS).map(([layer, color]) => (
+              <div key={layer} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-xs capitalize text-gray-700">{layer}</span>
+                <span className="text-xs text-gray-400">({layerCounts[layer] || 0})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // Tour Guide Component
+    const TourGuide = ({ onClose }) => {
+      const [step, setStep] = useState(0);
+      
+      const tourSteps = [
+        { title: 'Welcome to Understand-Anything!', content: 'This interactive dashboard helps you visualize and navigate your codebase as a knowledge graph.' },
+        { title: 'Search Anything', content: 'Use the search bar to find any function, class, or file. Try searching for "user" or "api".' },
+        { title: 'Filter by Layer', content: 'Click the layer filter to focus on specific architectural layers like API, Service, or Data.' },
+        { title: 'Explore Connections', content: 'Click on any node to see its details and explore connections to other parts of the codebase.' },
+        { title: 'Ready to Explore!', content: 'Start exploring your knowledge graph. Click nodes, search, and filter to understand your codebase.' }
+      ];
+
+      return (
+        <div className="tour-content animate-fade-in">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-xs font-medium rounded">Tour</span>
+            <span className="text-xs text-gray-400">Step {step + 1} of {tourSteps.length}</span>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{tourSteps[step].title}</h3>
+          <p className="text-sm text-gray-600 mb-4">{tourSteps[step].content}</p>
+          
+          <div className="flex items-center justify-center gap-2 mb-4">
+            {tourSteps.map((_, i) => (
+              <div
+                key={i}
+                className={`w-2 h-2 rounded-full transition-all ${i === step ? 'w-4 bg-indigo-500' : i < step ? 'bg-indigo-300' : 'bg-gray-300'}`}
+              />
+            ))}
+          </div>
+          
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">
+              Skip Tour
+            </button>
+            <div className="flex gap-2">
+              {step > 0 && (
+                <button 
+                  onClick={() => setStep(s => s - 1)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  ← Previous
+                </button>
+              )}
+              <button 
+                onClick={() => step < tourSteps.length - 1 ? setStep(s => s + 1) : onClose()}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg"
+              >
+                {step < tourSteps.length - 1 ? 'Next →' : 'Done ✓'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ==================== MAIN APP ====================
+    const App = () => {
+      const [selectedNode, setSelectedNode] = useState(null);
+      const [activeLayer, setActiveLayer] = useState('all');
+      const [showTour, setShowTour] = useState(true);
+
+      // Filter nodes by layer
+      const filteredNodes = useMemo(() => {
+        if (activeLayer === 'all') return DEMO_NODES;
+        return DEMO_NODES.filter(n => n.layer === activeLayer);
+      }, [activeLayer]);
+
+      // Filter edges based on filtered nodes
+      const filteredEdges = useMemo(() => {
+        const nodeIds = new Set(filteredNodes.map(n => n.id));
+        return DEMO_EDGES.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+      }, [filteredNodes]);
+
+      // Convert to React Flow format
+      const [nodes, setNodes, onNodesChange] = useNodesState(
+        filteredNodes.map((n, i) => ({
+          id: n.id,
+          type: 'default',
+          position: { x: (i % 5) * 250, y: Math.floor(i / 5) * 200 },
+          data: n,
+          selected: selectedNode === n.id
+        }))
+      );
+
+      const [edges, setEdges, onEdgesChange] = useEdgesState(
+        filteredEdges.map(e => ({
+          id: `${e.source}-${e.target}`,
+          source: e.source,
+          target: e.target,
+          label: e.label,
+          type: 'smoothstep',
+          animated: e.type === 'calls',
+          style: { 
+            stroke: LAYER_COLORS[filteredNodes.find(n => n.id === e.source)?.layer] || '#94a3b8',
+            strokeWidth: 2
+          },
+          labelStyle: { fontSize: 10, fill: '#6b7280' },
+          labelBgStyle: { fill: '#fff', padding: 4 }
+        }))
+      );
+
+      // Update nodes when layer changes
+      useEffect(() => {
+        setNodes(
+          filteredNodes.map((n, i) => ({
+            id: n.id,
+            type: 'default',
+            position: { x: (i % 5) * 250, y: Math.floor(i / 5) * 200 },
+            data: n,
+            selected: selectedNode === n.id
+          }))
+        );
+        setEdges(
+          filteredEdges.map(e => ({
+            id: `${e.source}-${e.target}`,
+            source: e.source,
+            target: e.target,
+            label: e.label,
+            type: 'smoothstep',
+            animated: e.type === 'calls',
+            style: { 
+              stroke: LAYER_COLORS[filteredNodes.find(n => n.id === e.source)?.layer] || '#94a3b8',
+              strokeWidth: 2
+            }
+          }))
+        );
+      }, [activeLayer, filteredNodes, filteredEdges]);
+
+      const handleSelectNode = useCallback((nodeId) => {
+        setSelectedNode(nodeId);
+      }, []);
+
+      const handleRelatedClick = useCallback((nodeId) => {
+        setSelectedNode(nodeId);
+      }, []);
+
+      const selectedNodeData = selectedNode ? DEMO_NODES.find(n => n.id === selectedNode) : null;
+
+      return (
+        <div className="h-screen w-screen bg-gray-50">
+          {/* Stats Bar */}
+          <StatsBar nodes={filteredNodes} edges={filteredEdges} activeLayer={activeLayer} />
+
+          {/* Main Graph */}
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={(_, node) => handleSelectNode(node.id)}
+            onPaneClick={() => setSelectedNode(null)}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.1}
+            maxZoom={2}
+            className="mt-14"
+          >
+            <Background variant="dots" gap={20} size={1} />
+            <Controls position="bottom-right" />
+            <MiniMap 
+              position="bottom-left"
+              nodeColor={(node) => LAYER_COLORS[node.data?.layer] || '#6366f1'}
+              maskColor="rgba(0, 0, 0, 0.1)"
+              pannable
+              zoomable
+            />
+
+            <Panel position="top-left">
+              <SearchPanel nodes={filteredNodes} onSelectNode={handleSelectNode} />
+            </Panel>
+
+            <Panel position="top-right">
+              <LayerFilter nodes={filteredNodes} activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+            </Panel>
+          </ReactFlow>
+
+          {/* Node Detail Panel */}
+          <NodeDetailPanel 
+            node={selectedNodeData}
+            onClose={() => setSelectedNode(null)}
+            onRelatedClick={handleRelatedClick}
+          />
+
+          {/* Legend */}
+          <Legend nodes={filteredNodes} />
+
+          {/* Tour Guide */}
+          {showTour && <TourGuide onClose={() => setShowTour(false)} />}
+
+          {/* Demo Banner */}
+          <div className="absolute bottom-4 left-4 bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+            <span className="font-semibold">Live Demo</span> - Sample knowledge graph visualization
+          </div>
+        </div>
+      );
+    };
+
+    // Render the app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
