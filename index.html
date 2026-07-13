@@ -3,21 +3,111 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Understand-Anything - Interactive Knowledge Graph Demo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Understand-Anything | Interactive Knowledge Graph Visualizer</title>
+  <meta name="description" content="Visualize and explore your codebase architecture with interactive knowledge graphs">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/@xyflow/react@12.11.2/dist/style.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
   <style>
-    body { margin: 0; font-family: system-ui, sans-serif; }
-    .react-flow__node { padding: 10px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; }
-    .custom-node { background: white; border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .custom-node.api { border-left: 4px solid #8b5cf6; }
-    .custom-node.service { border-left: 4px solid #3b82f6; }
-    .custom-node.data { border-left: 4px solid #10b981; }
-    .custom-node.ui { border-left: 4px solid #f59e0b; }
-    .custom-node.utility { border-left: 4px solid #6b7280; }
+    * { font-family: 'Inter', system-ui, sans-serif; }
+    body { margin: 0; overflow: hidden; }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    /* React Flow customizations */
+    .react-flow__node { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+    .react-flow__node:hover { transform: scale(1.02); }
+    .react-flow__controls { border-radius: 12px !important; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important; }
+    .react-flow__controls-button { border: none !important; }
+    .react-flow__controls-button:hover { background: #f1f5f9 !important; }
+    .react-flow__minimap { border-radius: 12px !important; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important; }
+    
+    /* Node styles */
+    .flow-node {
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      font-size: 13px;
+      min-width: 140px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    .flow-node:hover {
+      box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+      transform: translateY(-2px);
+    }
+    .flow-node.api { border-left: 4px solid #8b5cf6; background: linear-gradient(135deg, #faf5ff 0%, #fff 100%); }
+    .flow-node.service { border-left: 4px solid #3b82f6; background: linear-gradient(135deg, #eff6ff 0%, #fff 100%); }
+    .flow-node.data { border-left: 4px solid #10b981; background: linear-gradient(135deg, #ecfdf5 0%, #fff 100%); }
+    .flow-node.ui { border-left: 4px solid #f59e0b; background: linear-gradient(135deg, #fffbeb 0%, #fff 100%); }
+    .flow-node.utility { border-left: 4px solid #6b7280; background: linear-gradient(135deg, #f9fafb 0%, #fff 100%); }
+    
+    /* Glass effect panels */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    }
+    
+    /* Animations */
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-slide-in { animation: slideIn 0.3s ease-out; }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+    
+    /* Edge animation */
+    .animated-edge {
+      stroke-dasharray: 5;
+      animation: dash 0.5s linear infinite;
+    }
+    @keyframes dash {
+      to { stroke-dashoffset: -10; }
+    }
+    
+    /* Layer badge */
+    .layer-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .layer-api { background: #8b5cf6; color: white; }
+    .layer-service { background: #3b82f6; color: white; }
+    .layer-data { background: #10b981; color: white; }
+    .layer-ui { background: #f59e0b; color: white; }
+    .layer-utility { background: #6b7280; color: white; }
   </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-slate-100">
   <div id="root" style="width: 100vw; height: 100vh;"></div>
   
   <script type="importmap">
@@ -32,7 +122,7 @@
   </script>
   
   <script type="module">
-    import React, { useState, useCallback } from 'react';
+    import React, { useState, useCallback, useMemo, useEffect } from 'react';
     import { createRoot } from 'react-dom/client';
     import { 
       ReactFlow, 
@@ -43,60 +133,101 @@
       Handle,
       Position,
       useNodesState, 
-      useEdgesState
+      useEdgesState,
+      MarkerType
     } from '@xyflow/react';
 
-    const NODES = [
-      { id: '1', type: 'custom', position: { x: 100, y: 50 }, data: { label: 'api/routes.ts', layer: 'api' }, sourcePosition: Position.Bottom },
-      { id: '2', type: 'custom', position: { x: 100, y: 150 }, data: { label: 'handleAuth()', layer: 'api' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '3', type: 'custom', position: { x: 100, y: 250 }, data: { label: 'UserService', layer: 'service' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '4', type: 'custom', position: { x: 100, y: 350 }, data: { label: 'findById()', layer: 'data' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '5', type: 'custom', position: { x: 100, y: 450 }, data: { label: 'UserRepository', layer: 'data' }, sourcePosition: Position.Bottom },
-      { id: '6', type: 'custom', position: { x: 300, y: 150 }, data: { label: 'handleUsers()', layer: 'api' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '7', type: 'custom', position: { x: 300, y: 250 }, data: { label: 'createUser()', layer: 'service' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '8', type: 'custom', position: { x: 300, y: 350 }, data: { label: 'saveUser()', layer: 'data' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '9', type: 'custom', position: { x: 500, y: 250 }, data: { label: 'UserList', layer: 'ui' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
-      { id: '10', type: 'custom', position: { x: 300, y: 450 }, data: { label: 'models/user.ts', layer: 'data' }, sourcePosition: Position.Bottom },
+    // Sample architecture data
+    const INITIAL_NODES = [
+      // API Layer
+      { id: 'api-1', type: 'custom', position: { x: 50, y: 50 }, data: { label: 'API Router', desc: '/routes', layer: 'api' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'api-2', type: 'custom', position: { x: 50, y: 180 }, data: { label: 'Auth Handler', desc: 'POST /login', layer: 'api' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'api-3', type: 'custom', position: { x: 250, y: 50 }, data: { label: 'User Handler', desc: 'GET/POST /users', layer: 'api' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'api-4', type: 'custom', position: { x: 250, y: 180 }, data: { label: 'Order Handler', desc: 'GET/POST /orders', layer: 'api' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      
+      // Service Layer
+      { id: 'svc-1', type: 'custom', position: { x: 50, y: 320 }, data: { label: 'Auth Service', desc: 'Business logic', layer: 'service' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'svc-2', type: 'custom', position: { x: 250, y: 320 }, data: { label: 'User Service', desc: 'User management', layer: 'service' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'svc-3', type: 'custom', position: { x: 450, y: 320 }, data: { label: 'Order Service', desc: 'Order processing', layer: 'service' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'svc-4', type: 'custom', position: { x: 650, y: 320 }, data: { label: 'Email Service', desc: 'Notifications', layer: 'service' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      
+      // Data Layer
+      { id: 'data-1', type: 'custom', position: { x: 50, y: 480 }, data: { label: 'User Repository', desc: 'users table', layer: 'data' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'data-2', type: 'custom', position: { x: 250, y: 480 }, data: { label: 'Order Repository', desc: 'orders table', layer: 'data' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'data-3', type: 'custom', position: { x: 450, y: 480 }, data: { label: 'Cache Layer', desc: 'Redis', layer: 'data' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'data-4', type: 'custom', position: { x: 650, y: 480 }, data: { label: 'User Model', desc: 'Schema', layer: 'data' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      
+      // UI Layer
+      { id: 'ui-1', type: 'custom', position: { x: 850, y: 180 }, data: { label: 'Dashboard', desc: 'Admin panel', layer: 'ui' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'ui-2', type: 'custom', position: { x: 850, y: 320 }, data: { label: 'User Profile', desc: 'User settings', layer: 'ui' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
+      { id: 'ui-3', type: 'custom', position: { x: 850, y: 460 }, data: { label: 'Order List', desc: 'View orders', layer: 'ui' }, sourcePosition: Position.Bottom, targetPosition: Position.Top },
     ];
 
-    const EDGES = [
-      { id: 'e1-2', source: '1', target: '2', animated: true, style: { stroke: '#8b5cf6' } },
-      { id: 'e2-3', source: '2', target: '3', animated: true, style: { stroke: '#8b5cf6' } },
-      { id: 'e3-4', source: '3', target: '4', animated: true, style: { stroke: '#3b82f6' } },
-      { id: 'e4-5', source: '4', target: '5', animated: true, style: { stroke: '#10b981' } },
-      { id: 'e6-7', source: '6', target: '7', animated: true, style: { stroke: '#8b5cf6' } },
-      { id: 'e7-8', source: '7', target: '8', animated: true, style: { stroke: '#3b82f6' } },
-      { id: 'e8-10', source: '8', target: '10', animated: true, style: { stroke: '#10b981' } },
-      { id: 'e9-3', source: '9', target: '3', animated: true, style: { stroke: '#f59e0b' } },
+    const INITIAL_EDGES = [
+      // API -> Service
+      { id: 'e1', source: 'api-2', target: 'svc-1', animated: true, style: { stroke: '#8b5cf6', strokeWidth: 2 } },
+      { id: 'e2', source: 'api-3', target: 'svc-2', animated: true, style: { stroke: '#8b5cf6', strokeWidth: 2 } },
+      { id: 'e3', source: 'api-4', target: 'svc-3', animated: true, style: { stroke: '#8b5cf6', strokeWidth: 2 } },
+      
+      // Service connections
+      { id: 'e4', source: 'svc-2', target: 'svc-1', animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } },
+      { id: 'e5', source: 'svc-3', target: 'svc-4', animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } },
+      { id: 'e6', source: 'svc-2', target: 'svc-3', animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } },
+      
+      // Service -> Data
+      { id: 'e7', source: 'svc-1', target: 'data-1', animated: true, style: { stroke: '#10b981', strokeWidth: 2 } },
+      { id: 'e8', source: 'svc-3', target: 'data-2', animated: true, style: { stroke: '#10b981', strokeWidth: 2 } },
+      { id: 'e9', source: 'svc-2', target: 'data-3', animated: true, style: { stroke: '#10b981', strokeWidth: 2 } },
+      { id: 'e10', source: 'svc-2', target: 'data-4', animated: true, style: { stroke: '#10b981', strokeWidth: 2 } },
+      
+      // UI connections
+      { id: 'e11', source: 'ui-1', target: 'svc-1', animated: true, style: { stroke: '#f59e0b', strokeWidth: 2 } },
+      { id: 'e12', source: 'ui-1', target: 'svc-2', animated: true, style: { stroke: '#f59e0b', strokeWidth: 2 } },
+      { id: 'e13', source: 'ui-2', target: 'svc-2', animated: true, style: { stroke: '#f59e0b', strokeWidth: 2 } },
+      { id: 'e14', source: 'ui-3', target: 'svc-3', animated: true, style: { stroke: '#f59e0b', strokeWidth: 2 } },
     ];
 
-    const layerColors = {
-      api: { bg: '#f3e8ff', border: '#8b5cf6' },
-      service: { bg: '#dbeafe', border: '#3b82f6' },
-      data: { bg: '#d1fae5', border: '#10b981' },
-      ui: { bg: '#fef3c7', border: '#f59e0b' },
-      utility: { bg: '#f3f4f6', border: '#6b7280' },
+    const LAYER_CONFIG = {
+      api: { bg: '#faf5ff', border: '#8b5cf6', badge: 'bg-purple-500', label: 'API Layer' },
+      service: { bg: '#eff6ff', border: '#3b82f6', badge: 'bg-blue-500', label: 'Service Layer' },
+      data: { bg: '#ecfdf5', border: '#10b981', badge: 'bg-emerald-500', label: 'Data Layer' },
+      ui: { bg: '#fffbeb', border: '#f59e0b', badge: 'bg-amber-500', label: 'UI Layer' },
+      utility: { bg: '#f9fafb', border: '#6b7280', badge: 'bg-gray-500', label: 'Utility Layer' },
     };
 
-    function CustomNode({ data }) {
-      const colors = layerColors[data.layer] || layerColors.utility;
+    // Custom Node Component
+    function FlowNode({ data }) {
+      const config = LAYER_CONFIG[data.layer] || LAYER_CONFIG.utility;
       return React.createElement('div', {
-        className: 'custom-node ' + data.layer,
-        style: { background: colors.bg, borderColor: colors.border }
+        className: 'flow-node ' + data.layer,
+        style: { borderColor: config.border }
       }, [
-        React.createElement(Handle, { key: 't', type: 'target', position: Position.Top }),
-        React.createElement('div', { key: 'l', className: 'font-semibold' }, data.label),
-        React.createElement('div', { key: 's', className: 'text-xs text-gray-500 uppercase' }, data.layer),
-        React.createElement(Handle, { key: 's2', type: 'source', position: Position.Bottom })
+        React.createElement(Handle, { key: 'target', type: 'target', position: Position.Top, className: '!w-2 !h-2 !bg-gray-400' }),
+        React.createElement('div', { key: 'name', className: 'font-semibold text-gray-800 mb-1' }, data.label),
+        React.createElement('div', { key: 'desc', className: 'text-xs text-gray-500 mb-2' }, data.desc),
+        React.createElement('span', { 
+          key: 'badge', 
+          className: 'layer-badge ' + config.badge,
+          style: { fontSize: '9px' }
+        }, data.layer.toUpperCase()),
+        React.createElement(Handle, { key: 'source', type: 'source', position: Position.Bottom, className: '!w-2 !h-2 !bg-gray-400' }),
       ]);
     }
 
-    const nodeTypes = { custom: CustomNode };
+    const nodeTypes = { custom: FlowNode };
 
+    // Main App Component
     function App() {
-      const [nodes, setNodes, onNodesChange] = useNodesState(NODES);
-      const [edges, setEdges, onEdgesChange] = useEdgesState(EDGES);
+      const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
+      const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
       const [selectedNode, setSelectedNode] = useState(null);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [activeLayer, setActiveLayer] = useState('all');
+      const [isLoaded, setIsLoaded] = useState(false);
+
+      useEffect(() => {
+        setIsLoaded(true);
+      }, []);
 
       const onNodeClick = useCallback((event, node) => {
         setSelectedNode(node);
@@ -106,41 +237,210 @@
         setSelectedNode(null);
       }, []);
 
+      // Filter nodes based on search and layer
+      const filteredNodes = useMemo(() => {
+        return nodes.map(node => {
+          const matchesSearch = searchQuery === '' || 
+            node.data.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            node.data.desc.toLowerCase().includes(searchQuery.toLowerCase());
+          const matchesLayer = activeLayer === 'all' || node.data.layer === activeLayer;
+          return {
+            ...node,
+            hidden: !(matchesSearch && matchesLayer)
+          };
+        });
+      }, [nodes, searchQuery, activeLayer]);
+
+      const filteredEdges = useMemo(() => {
+        if (activeLayer === 'all') return edges;
+        const visibleNodeIds = nodes.filter(n => n.data.layer === activeLayer).map(n => n.id);
+        return edges.filter(e => visibleNodeIds.includes(e.source) || visibleNodeIds.includes(e.target));
+      }, [edges, nodes, activeLayer]);
+
+      const nodeCountByLayer = useMemo(() => {
+        return nodes.reduce((acc, node) => {
+          acc[node.data.layer] = (acc[node.data.layer] || 0) + 1;
+          return acc;
+        }, {});
+      }, [nodes]);
+
       return React.createElement('div', { style: { width: '100%', height: '100%' } },
         React.createElement(ReactFlow, {
-          nodes,
-          edges,
-          onNodesChange,
-          onEdgesChange,
+          nodes: filteredNodes,
+          edges: filteredEdges,
+          onNodesChange: onNodesChange,
+          onEdgesChange: onEdgesChange,
           onNodeClick,
           onPaneClick,
           nodeTypes,
-          fitView: true
+          fitView: true,
+          fitViewOptions: { padding: 0.2 },
+          minZoom: 0.3,
+          maxZoom: 2
         }, [
-          React.createElement(Background, { key: 'bg', variant: 'dots', gap: 20, size: 1 }),
-          React.createElement(Controls, { key: 'ctrl' }),
+          React.createElement(Background, { 
+            key: 'bg', 
+            variant: 'dots', 
+            gap: 20, 
+            size: 1,
+            color: '#cbd5e1'
+          }),
+          React.createElement(Controls, { 
+            key: 'ctrl',
+            showInteractive: false 
+          }),
           React.createElement(MiniMap, { 
             key: 'mm', 
-            nodeColor: (n) => layerColors[n.data?.layer]?.border || '#6b7280' 
+            nodeColor: (n) => LAYER_CONFIG[n.data?.layer]?.border || '#6b7280',
+            maskColor: 'rgba(0, 0, 0, 0.1)',
+            style: { background: '#f8fafc' }
           }),
-          React.createElement(Panel, { key: 'p1', position: 'top-left' },
-            React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-lg' }, [
-              React.createElement('h1', { key: 't', className: 'font-bold text-lg mb-2' }, 'Understand-Anything'),
-              React.createElement('p', { key: 'd', className: 'text-sm text-gray-600' }, 'Click on nodes to explore')
+          
+          // Header Panel
+          React.createElement(Panel, { key: 'header', position: 'top-left' },
+            React.createElement('div', { 
+              className: 'glass-panel rounded-2xl p-5 min-w-80 animate-fade-in'
+            }, [
+              React.createElement('div', { key: 'logo', className: 'flex items-center gap-3 mb-4' }, [
+                React.createElement('div', { 
+                  className: 'w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center'
+                }, 
+                  React.createElement('svg', { className: 'w-6 h-6 text-white', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                    React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M13 10V3L4 14h7v7l9-11h-7z' })
+                  )
+                ),
+                React.createElement('div', null, [
+                  React.createElement('h1', { className: 'font-bold text-lg text-gray-900' }, 'Understand-Anything'),
+                  React.createElement('p', { className: 'text-xs text-gray-500' }, 'Code Architecture Visualizer')
+                ])
+              ]),
+              
+              // Search Input
+              React.createElement('div', { key: 'search', className: 'relative mb-4' },
+                React.createElement('svg', { 
+                  className: 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400',
+                  fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24'
+                }, React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' })),
+                React.createElement('input', {
+                  type: 'text',
+                  placeholder: 'Search nodes...',
+                  value: searchQuery,
+                  onChange: (e) => setSearchQuery(e.target.value),
+                  className: 'w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all'
+                })
+              ),
+              
+              // Layer Filter
+              React.createElement('div', { key: 'filters', className: 'flex flex-wrap gap-2' }, [
+                React.createElement('button', {
+                  key: 'all',
+                  onClick: () => setActiveLayer('all'),
+                  className: 'px-3 py-1.5 text-xs font-medium rounded-lg transition-all ' + 
+                    (activeLayer === 'all' 
+                      ? 'bg-gray-900 text-white' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+                }, 'All (' + nodes.length + ')'),
+                ...Object.entries(LAYER_CONFIG).map(([layer, config]) =>
+                  nodeCountByLayer[layer] > 0 && React.createElement('button', {
+                    key: layer,
+                    onClick: () => setActiveLayer(layer),
+                    className: 'px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ' + 
+                      (activeLayer === layer 
+                        ? 'text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'),
+                    style: activeLayer === layer ? { backgroundColor: config.border } : {}
+                  }, [
+                    React.createElement('span', { key: 'dot', className: 'w-2 h-2 rounded-full', style: { backgroundColor: config.border } }),
+                    React.createElement('span', { key: 'label' }, config.label.split(' ')[0] + ' (' + nodeCountByLayer[layer] + ')')
+                  ])
+                )
+              ])
             ])
           ),
-          selectedNode && React.createElement(Panel, { key: 'p2', position: 'top-right' },
-            React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-lg w-64' }, [
-              React.createElement('h2', { key: 'h', className: 'font-bold mb-2' }, 'Node Details'),
-              React.createElement('p', { key: 'n' }, React.createElement('strong', null, 'Name: '), selectedNode.data.label),
-              React.createElement('p', { key: 'l' }, React.createElement('strong', null, 'Layer: '), selectedNode.data.layer),
-              React.createElement('p', { key: 'i' }, React.createElement('strong', null, 'ID: '), selectedNode.id)
+          
+          // Legend Panel
+          React.createElement(Panel, { key: 'legend', position: 'bottom-left' },
+            React.createElement('div', { 
+              className: 'glass-panel rounded-xl p-4 animate-slide-in'
+            }, [
+              React.createElement('h3', { className: 'text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3' }, 'Legend'),
+              React.createElement('div', { className: 'flex flex-col gap-2' },
+                Object.entries(LAYER_CONFIG).filter(([layer]) => nodeCountByLayer[layer] > 0).map(([layer, config]) =>
+                  React.createElement('div', { key: layer, className: 'flex items-center gap-2' },
+                    React.createElement('div', { 
+                      className: 'w-3 h-3 rounded-sm',
+                      style: { backgroundColor: config.border }
+                    }),
+                    React.createElement('span', { className: 'text-xs text-gray-600' }, config.label)
+                  )
+                )
+              )
             ])
           ),
-          React.createElement(Panel, { key: 'p3', position: 'bottom-left' },
-            React.createElement('div', { className: 'bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm' },
-              React.createElement('span', { className: 'font-semibold' }, 'Live Demo')
-            )
+          
+          // Node Details Panel
+          selectedNode && React.createElement(Panel, { key: 'details', position: 'top-right' },
+            React.createElement('div', { 
+              className: 'glass-panel rounded-2xl p-5 w-72 animate-slide-in'
+            }, [
+              React.createElement('div', { className: 'flex items-start justify-between mb-4' }, [
+                React.createElement('div', null, [
+                  React.createElement('h2', { className: 'font-bold text-gray-900' }, selectedNode.data.label),
+                  React.createElement('p', { className: 'text-sm text-gray-500' }, selectedNode.data.desc)
+                ]),
+                React.createElement('span', { 
+                  className: 'layer-badge ' + LAYER_CONFIG[selectedNode.data.layer].badge
+                }, selectedNode.data.layer)
+              ]),
+              React.createElement('div', { className: 'border-t border-gray-100 pt-4' }, [
+                React.createElement('div', { className: 'flex justify-between text-sm mb-2' },
+                  React.createElement('span', { className: 'text-gray-500' }, 'Node ID'),
+                  React.createElement('span', { className: 'font-mono text-gray-700' }, selectedNode.id)
+                ),
+                React.createElement('div', { className: 'flex justify-between text-sm' },
+                  React.createElement('span', { className: 'text-gray-500' }, 'Position'),
+                  React.createElement('span', { className: 'font-mono text-gray-700' }, 
+                    selectedNode.position.x + ', ' + selectedNode.position.y
+                  )
+                )
+              ])
+            ])
+          ),
+          
+          // Stats Panel
+          React.createElement(Panel, { key: 'stats', position: 'bottom-right' },
+            React.createElement('div', { 
+              className: 'glass-panel rounded-xl p-4 animate-fade-in'
+            }, [
+              React.createElement('div', { className: 'text-xs text-gray-500 mb-2' }, 'Graph Stats'),
+              React.createElement('div', { className: 'flex gap-6' }, [
+                React.createElement('div', { key: 'nodes' }, [
+                  React.createElement('div', { className: 'text-2xl font-bold text-gray-900' }, nodes.length),
+                  React.createElement('div', { className: 'text-xs text-gray-500' }, 'Nodes')
+                ]),
+                React.createElement('div', { key: 'edges' }, [
+                  React.createElement('div', { className: 'text-2xl font-bold text-gray-900' }, edges.length),
+                  React.createElement('div', { className: 'text-xs text-gray-500' }, 'Edges')
+                ])
+              ])
+            ])
+          ),
+          
+          // Demo Banner
+          React.createElement(Panel, { key: 'banner', position: 'bottom-center' },
+            React.createElement('div', { 
+              className: 'bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3',
+              style: { animation: 'fadeIn 0.5s ease-out 0.3s both' }
+            }, [
+              React.createElement('div', { 
+                className: 'w-2 h-2 rounded-full bg-green-400 animate-pulse'
+              }),
+              React.createElement('span', { className: 'text-sm font-medium' }, 'Interactive Demo • Click nodes to explore'),
+              React.createElement('svg', { 
+                className: 'w-4 h-4',
+                fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24'
+              }, React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M14 5l7 7m0 0l-7 7m7-7H3' }))
+            ])
           )
         ])
       );
